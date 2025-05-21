@@ -13,5 +13,5 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: make Makefile.win
-      run: make Makefile.win
+    - name: make Makefile
+      run: make Makefile
