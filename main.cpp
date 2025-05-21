@@ -6,9 +6,8 @@
   Description: a tool to convert PHC25 basic files to/from text files
 */
 
+#ifdef WINDOWS
 #include <windows.h>
-#include "main.h"
-#include <stdio.h>
 
 /* Declare WindowsProcedure */
 LRESULT CALLBACK WindowProcedure(HWND, UINT, WPARAM, LPARAM);
@@ -17,6 +16,19 @@ char szClassName[] = "PHC25 K7 manipulation Tool";
 HINSTANCE hThisInstance;
 
 #define IDC_MAIN_TEXT   1001
+
+#else
+#define BOOL bool
+#define TRUE true
+#define FALSE false
+#define MAX_PATH 1024
+#include <string.h>
+#include <cstdlib>
+#endif
+
+#include "main.h"
+#include <stdio.h>
+
 
 unsigned char *g_phcFile=NULL;
 int g_phcFileSize;
@@ -188,7 +200,7 @@ BOOL DecodePHCFile(char *fname) {
                else
                    if (g_phcFile[i]>=0x20)
                       if (g_phcFile[i]=='\\')
-                         fprintf(f,"\\\\",g_phcFile[i]);     
+                         fprintf(f,"\\\\");
                       else
                          fprintf(f,"%c",g_phcFile[i]);     
                    else
@@ -221,6 +233,7 @@ BOOL ReadPHCFile(char *fname) {
      return TRUE;
 }
 
+#ifdef WINDOWS
 BOOL DoPHC2TXT(HWND hwnd)
 {
    OPENFILENAME ofn;
@@ -274,7 +287,7 @@ BOOL DoPHC2TXT(HWND hwnd)
    
    return TRUE;
 }
-
+#endif
 
 /*
  *  TXT to PHC convert stuff
@@ -504,7 +517,7 @@ BOOL DecodeTXTFile(char *fname) {
      f=fopen(fname,"wb");
      if (f==NULL) return FALSE;
 
-	 char header[]={0xA5,0xA5,0xA5,0xA5,0xA5,0xA5,0xA5,0xA5,0xA5,0xA5,'T','E','S','T',0,0};
+	 unsigned char header[]={0xA5,0xA5,0xA5,0xA5,0xA5,0xA5,0xA5,0xA5,0xA5,0xA5,'T','E','S','T',0,0};
      fwrite(header,sizeof(header),sizeof(char),f);
 	 
      fwrite(phc_buf,phc_buf_size,sizeof(char),f);
@@ -513,6 +526,8 @@ BOOL DecodeTXTFile(char *fname) {
      fclose(log);
      return TRUE;
 }
+
+
 
 BOOL ReadTXTFile(char *fname) {
      FILE * f;
@@ -533,6 +548,7 @@ BOOL ReadTXTFile(char *fname) {
      return TRUE;
 }
 
+#ifdef WINDOWS
 BOOL DoTXT2PHC(HWND hwnd)
 {
    OPENFILENAME ofn;
@@ -689,3 +705,41 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
    }
   return 0;
 }
+#else
+
+enum {NO_MODE, PHC_MODE, BAS_MODE, WAV_MODE} g_mode = NO_MODE;
+
+int main (int argc, char * argv[])
+{
+     int index;
+
+     for (index = 1; index < argc; index ++) {
+          if (strcmp(argv[index],"-phc")==0) {
+               if (index+2>=argc) {
+                    fprintf(stderr,"[FATAL] Option %s needs 2 filenames\n",argv[index]);
+                    exit (-2);
+               }
+               g_mode=PHC_MODE;
+               break;
+          }
+          if (strcmp(argv[index],"-bas")==0) {
+               if (index+2>=argc) {
+                    fprintf(stderr,"[FATAL] Option %s needs 2 filenames\n",argv[index]);
+                    exit (-2);
+               }
+               g_mode=BAS_MODE;
+               break;
+          }
+     }
+     if (g_mode == PHC_MODE) {
+        fprintf(stderr,"[INFO] opening phcmode for %s %s\n",argv[index+1],argv[index+2]);
+        ReadPHCFile(argv[index+1]);
+        DecodePHCFile(argv[index+2]);
+     }
+     if (g_mode == BAS_MODE) {
+        fprintf(stderr,"[INFO] opening phcmode for %s %s\n",argv[index+1],argv[index+2]);
+        ReadTXTFile(argv[index+1]);
+        DecodeTXTFile(argv[index+2]);
+     }
+}
+#endif
