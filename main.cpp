@@ -168,7 +168,9 @@ BOOL DecodePHCFile(char *fname) {
 
 // skips filename
      i+=6;
-     
+
+
+// search marker after last line number 00 00 FF FF
      line=i;
      while ((g_phcFile[line]!=0x00) || (g_phcFile[line+1]!=0x00)) {
            if (line+1>=g_phcFileSize) {fclose(f); return FALSE;}
@@ -180,6 +182,7 @@ BOOL DecodePHCFile(char *fname) {
            line++;    
      }
 
+// line is offset of last line in file
      line-=3;
           
      while (g_phcFile[i]!=0x00) {
@@ -368,8 +371,12 @@ BOOL DecodeTXTFile(char *fname) {
      unsigned char *end_p=NULL;
      int i;
      int v;
+     int     phc_buf_size_last;
      
      phc_nb_lines=0;
+     phc_buf_size_last=0;
+     int line_num[65535];
+     int line_adr[65535];
      
      strcpy(logFname,fname);
      strcat(logFname,".log");
@@ -399,14 +406,12 @@ BOOL DecodeTXTFile(char *fname) {
      temp_line[end_p-start_p]='\0';
      sscanf(temp_line,"%d",&num_line);
      fprintf(log,"found line %d ",num_line);
-     push_phc((num_line&0xFF00)>>8);
-     push_phc(num_line&0xFF);
-     
+     line_num[phc_nb_lines]=num_line;
      
      start_p=end_p;
 
      // find end of line
-     while ((end_p<(g_txtFile+g_txtFileSize)) && (*end_p!=0x0D)) {
+     while ((end_p<(g_txtFile+g_txtFileSize)) && (*end_p!=0x0D) && (*end_p!=0x0A)) {
            end_p++;
            }
 
@@ -483,37 +488,14 @@ BOOL DecodeTXTFile(char *fname) {
      } // of line decode bloc
      fprintf(log,"\n");
      push_phc('\0');
+     line_adr[phc_nb_lines]=0xC001+phc_buf_size_last;
+     phc_buf_size_last=phc_buf_size;
      phc_nb_lines++;
      start_p=end_p;
 
 
      } // of while (1)
 
-     {
-       int off=0;
-       int off_dest=0;
-       int off_line_info=phc_buf_size+phc_nb_lines*2+2+1;
-       
-       int len;
-       unsigned int line_num;
-       for (i=0;i<phc_nb_lines;i++) {
-          // reads line num
-          line_num=((((unsigned char)phc_buf[off])<<8) | ((unsigned char)phc_buf[off+1]))&0xFFFF;
-          off+=2;
-          // we can use strlen here since line is null terminated
-          len=strlen(&phc_buf[off]);
-          
-          fprintf(log,"Line %d len %d off %d\n",line_num,len,off);
-          // now build the final buffer (without header)
-          
-          strncpy(&phc_buf2[off_dest],&phc_buf[off],len+1);
-          
-          
-          off_line_info-=4;
-          off+=len+1;
-          off_dest+=len+1;
-       }
-     }
      f=fopen(fname,"wb");
      if (f==NULL) return FALSE;
 
@@ -521,7 +503,25 @@ BOOL DecodeTXTFile(char *fname) {
      fwrite(header,sizeof(header),sizeof(char),f);
 	 
      fwrite(phc_buf,phc_buf_size,sizeof(char),f);
-     
+
+	 unsigned char blk0000[]={0x00,0x00};
+     fwrite(blk0000,sizeof(blk0000),sizeof(char),f);
+
+     for (i=phc_nb_lines-1;i>=0;i--) {
+        fprintf(f,"%c%c",line_adr[i]&0xFF,line_adr[i]>>8);
+        fprintf(f,"%c%c",line_num[i]&0xFF,line_num[i]>>8);
+     }
+
+     fprintf(f,"%c",0x00);
+	 unsigned char blkFFFF[]={0xFF,0xFF};
+     fwrite(blkFFFF,sizeof(blkFFFF),sizeof(char),f);
+     fwrite(blkFFFF,sizeof(blkFFFF),sizeof(char),f);
+
+      for (i=0;i<9;i++) {
+         fwrite(blk0000,sizeof(blk0000),sizeof(char),f);
+      }
+
+
      fclose(f);
      fclose(log);
      return TRUE;
